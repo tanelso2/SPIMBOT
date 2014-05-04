@@ -75,8 +75,10 @@ main:
 
 pickup_loop:
 	la $t4, PICK_FLAG
-	sw $t4, 0($t4)
-	j pickup_loop
+	sw $t4, 0($t4)		#so instead of this loop, another thing
+	j pickup_loop		# I thought of is to find the Euclidean distance
+						#in the timer interrupt and then triggering the PICK_FLAG
+						# when it's lower than a certain threshold. That would probably be better
 
 	jr	$ra
 
@@ -145,7 +147,7 @@ timer_interrupt:
 	j request_timer
 getting_flags_logic:
 	la $k0, flags
-	sw $k0, FLAG_REQUEST($zero)
+	sw $k0, FLAG_REQUEST($zero)  #TODO: optimization: make this find the nearest flag and go to that one
 	lw $a0, 0($k0)
 	li $t0, -1
 	beq $a0, $t0, generate_flag
@@ -160,8 +162,14 @@ request_timer:
 	j	interrupt_dispatch	# see if other interrupts are waiting
 
 generate_flag:
+	lw $a0, ENERGY($zero)
+	li $t0, 7
+	blt $a0, $t0, out_of_energy
 	sw $t0, GENERATE_FLAG($zero)
 	j getting_flags_logic
+out_of_energy:
+	jal go_home
+	j request_timer
 
 bonk_interrupt:
 	sw $a1, BONK_ACKNOWLEDGE
