@@ -132,7 +132,17 @@ get_square_begin:
 ##   } while (changed);
 ## }
 
-solve:
+
+	
+solve:	
+	sub $sp, $sp, 4
+	sw $ra, 0($sp)
+
+again:	la  $a0, hard_board
+	jal 	rule1
+	bne $v0, $zero, again
+	lw $ra, 0($sp)
+	add $sp, $sp, 4
 	jr	$ra
 
 
@@ -180,9 +190,119 @@ solve:
 ##   return changed;
 ## }
 
+
 rule1:
-	li	$v0, 0
+	sub	$sp, $sp, 32
+	sw 	$ra, 0($sp)
+	sw	$s0, 4($sp)
+	sw	$s1, 8($sp)	
+	sw 	$s2, 12($sp)
+	sw 	$s3, 16($sp)
+	sw 	$s4, 20($sp)		# holds array start ptr
+	sw 	$s5, 24($sp)   		# holds value
+	sw 	$s6, 28($sp)		# k	
+
+	move 	$s4, $a0		# grab onto array ptr
+
+	li 	$s0, 16 		# GRID_SQUARED = constant 16
+	li 	$s1, 0 			# changed = false
+	li 	$s2, -1			
+r1loop1:
+	add 	$s2, $s2, 1		# i = 0, increments i
+	bge 	$s2, $s0, ret_changed
+	li 	$s3, -1			
+r1loop2:
+	add 	$s3, $s3, 1		# j = 0, increments j
+	bge 	$s3, $s0, r1loop1
+	mul 	$t0, $s2, 16		# i*16
+	add 	$t0, $t0, $s3		# i*16 + j
+	sll 	$t0, $t0, 1		# mult by 2 (dealing with halfs)
+	add 	$t0, $s4, $t0		# add indexing to ptr
+	lhu 	$s5, 0($t0)		# value = board[i][j]
+	move 	$a0, $s5
+	jal 	has_single_bit_set 	# $v0 = yes or no
+	beq	$v0, $zero, r1loop2
+	li	$s6, -1	
+r1loop3:
+	add 	$s6, $s6, 1		# k = 0, increments k
+	bge	$s6, $s0, elim_square
+	beq 	$s6, $s3, elim_column	# k != j
+	mul	$t0, $s2, 16		# i*16
+	add 	$t0, $t0, $s6		# i*16 + k
+	sll 	$t0, $t0, 1		# << 1
+	add 	$t0, $t0, $s4		# address of board[i][k]	
+	lhu	$t1, 0($t0)		# board[i][k]
+	and 	$t2, $t1, $s5		# board[i][k] & value
+	beq 	$t2, $zero, elim_column
+	not 	$t2, $s5
+	and 	$t1, $t2, $t1 		# board[i][k] & ~value
+	sh	$t1, 0($t0)		# board[i][k] &= ~value
+	li	$s1, 1			# changed = true
+elim_column:
+	beq 	$s6, $s2, r1loop3	
+	mul	$t0, $s6, 16		# k*16
+	add 	$t0, $t0, $s3		# k*16 + j
+	sll 	$t0, $t0, 1		# << 1
+	add 	$t0, $s4, $t0		# address of board[k][j]
+	lhu 	$t1, 0($t0)		# board[k][j]
+	and	$t2, $t1, $s5		# board[k][j] & value
+	beq 	$t2, $zero, r1loop3	
+	not 	$t2, $s5		# ~value
+	and 	$t1, $t1, $t2		# board[k][j] & ~value
+	sh 	$t1, 0($t0)		# board[k][j] &= ~value
+	li 	$s1, 1			# changed = true
+	j 	r1loop3
+
+elim_square:	
+	move 	$a0, $s2
+	jal 	get_square_begin
+	move 	$s6, $v0		# $s6 = ii = k
+	move 	$a0, $s3
+	jal 	get_square_begin 	# jj = $v0
+	add	$t0, $s6, 4		# $t0 = ii + GRIDSIZE
+	add 	$t1, $v0, 4		# $t1 = jj + GRIDSIZE
+
+	sub 	$s6, $s6, 1 	
+r1loop4:
+	add 	$s6, $s6, 1		# increments k
+	bge	$s6, $t0, r1loop2	# k < ii + GRIDSIZE
+	move 	$t2, $v0 		# l = jj
+	sub 	$t2, $t2, 1
+r1loop5:
+	add 	$t2, $t2, 1		# increment l
+	bge 	$t2, $t1, r1loop4
+	xor 	$t3, $s6, $s2
+	xor 	$t4, $t2, $s3		
+	or 	$t4, $t4, $t3		
+	beq	$t4, $zero, r1loop5	# if k==i and l==j continue
+	mul	$t5, $s6, 16 		# k*16
+	add 	$t5, $t5, $t2		# k*16 + l
+	sll 	$t5, $t5, 1		# << 1
+	add 	$t5, $s4, $t5 		# holds address of board[k][l]
+	lhu 	$t6, 0($t5)		# board[k][l]
+	and 	$t7, $t6, $s5		# board[k][l] & value
+	beq 	$t7, $zero, r1loop5	
+	not 	$t7, $s5 		# ~value
+	and 	$t6, $t6, $t7		# board[k][l] & ~value
+	sh 	$t6, 0($t5)		# board[k][l] &= ~value
+	li 	$s1, 1			# changed = true
+	j 	r1loop5
+
+ret_changed:
+	move 	$v0, $s1		# changed data moved into return reg
+	lw      $ra, 0($sp)
+        lw      $s0, 4($sp)
+        lw      $s1, 8($sp)
+        lw      $s2, 12($sp)
+        lw      $s3, 16($sp)
+        lw      $s4, 20($sp)          
+        lw      $s5, 24($sp)          
+        lw      $s6, 28($sp)           
+	
+	add 	$sp, $sp, 32
+
 	jr	$ra
+
 
 
 ## bool
