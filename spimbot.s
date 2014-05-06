@@ -76,101 +76,7 @@ main:
 	sw $t0, TIMER($zero) #requesting an interrupt because I put most of the logic in the interrupt handler
 
 pickup_loop:
-	la $t4, PICK_FLAG
-	sw $t4, 0($t4)		#so instead of this loop, another thing
-	j pickup_loop		# I thought of is to find the Euclidean distance
-						#in the timer interrupt and then triggering the PICK_FLAG
-						# when it's lower than a certain threshold. That would probably be better
-
-	jr	$ra
-
-
-
-
-
-
-.kdata	# interrupt handler data (separated just for readability)
-chunkIH:	.space 166666	
-non_intrpt_str:	.asciiz "Non-interrupt exception\n"
-unhandled_str:	.asciiz "Unhandled interrupt type\n"
-
-
-.ktext 0x80000180
-interrupt_handler:
-.set noat
-	move	$k1, $at	# Save $at
-.set at
-	la	$k0, chunkIH
-	sw	$a0, 0($k0)	# Get some free registers
-	sw	$a1, 4($k0)	# by storing them to a global variable
-	sw $v0, 8($k0)
-	sw $t0, 12($k0)
-
-	mfc0	$k0, $13	# Get Cause register
-	srl	$a0, $k0, 2
-	and	$a0, $a0, 0xf	# ExcCode field
-	bne	$a0, 0, non_intrpt
-
-interrupt_dispatch:	# Interrupt:
-	mfc0	$k0, $13	# Get Cause register, again
-	beq	$k0, 0, done	# handled all outstanding interrupts
-	
-	and	$a0, $k0, TIMER_MASK	# is there a timer interrupt?
-	bne	$a0, 0, timer_interrupt
-
-	and	$a0, $k0, COORDS_MASK
-	bne	$a0, 0, coords_interrupt
-
-	and $a0, $k0, BONK_MASK
-	bne $a0, 0, bonk_interrupt
-
-	and $a0, $k0, INVIS_MASK
-	bne $a0, 0, invis_interrupt
-
-	and $a0, $k0, TAG_MASK
-	bne $a0, 0, tag_interrupt
-
-	j	done
-
-coords_interrupt:
-	sw $a1, COORDS_ACKNOWLEDGE
-	sw $a1, COORDS_REQUEST
-
-
-	j	interrupt_dispatch	# see if other interrupts are waiting
-
-timer_interrupt:
-	sw	$a1, TIMER_ACKNOWLEDGE	# acknowledge interrupt
-	
-	lw $a0, FLAGS_IN_HAND($zero)
-	li $a1, 3
-	blt $a0, $a1, getting_flags_logic
-	jal go_home
-	j request_timer
-getting_flags_logic:
-	la $k0, flags
-	sw $k0, FLAG_REQUEST($zero)  #TODO: optimization: make this find the nearest flag and go to that one
-	lw $a0, 0($k0)
-	li $t0, -1
-	beq $a0, $t0, generate_flag
-	lw $a1, 4($k0)
-	jal goto_point
-
-request_timer:
-	lw	$v0, TIMER	# current time
-	add	$v0, $v0, 2000
-	sw	$v0, TIMER	# request timer 
-
-	j	interrupt_dispatch	# see if other interrupts are waiting
-
-generate_flag:
-	lw $a0, ENERGY($zero)
-	li $t0, 7
-	blt $a0, $t0, out_of_energy
-	sw $t0, GENERATE_FLAG($zero)
-	j getting_flags_logic
-out_of_energy:
-	jal go_home
+	sw $t4, PICK_FLAG($zero)		#so instead of this loop, another thing
 	la $a0, sudoku_board
 	sw $a0, SUDOKU_REQUEST($zero) 	# make sudoku request to fill sudoku board, $a0 is also set up to be passed into rule1
 	
@@ -180,69 +86,10 @@ solve:
 	bne $v0, $zero, solve
 	la 	$a0, sudoku_board
 	sw 	$a0, SUDOKU_SOLVED($zero) 	# get 25 energy points (if the solver works)
-	j request_timer
+	j pickup_loop		# I thought of is to find the Euclidean distance
+						#in the timer interrupt and then triggering the PICK_FLAG
+						# when it's lower than a certain threshold. That would probably be better
 
-bonk_interrupt:
-	sw $a1, BONK_ACKNOWLEDGE
-
-#If we hit a wall, then we are turning 180 and heading in that direction.
-#We can change this later.
-	li $a0, 180
-	sw $a0, ANGLE($zero)
-	sw $zero, ANGLE_CONTROL($zero)
-	li $a0, 10
-	sw $a0, VELOCITY($zero)
-
-	j interrupt_dispatch
-
-invis_interrupt:						# TODOL make this actually do things
-	sw $a1, INVIS_ACKNOWLEDGE($zero)
-	j interrupt_dispatch
-
-tag_interrupt:							# TODO: make this actually do things
-	sw $a1, TAG_ACKNOWLEDGE($zero)
-	j interrupt_dispatch
-
-non_intrpt:	# was some non-interrupt
-	li	$v0, PRINT_STRING
-	la	$a0, non_intrpt_str
-	syscall	# print out an error message
-	# fall through to done
-
-go_home:
-	sub $sp, $sp, 4
-	sw $ra, 0($sp)
-	li $a0, BASE_X
-	li $a1, BASE_Y
-	jal goto_point
-	lw $ra, 0($sp)
-	add $sp, $sp, 4
-	jr $ra
-
-	
-goto_point:						#Take $a0 = destination x and $a1 = destination y and sets Spimbot on a crash
-	sub $sp, $sp, 4				# course in that direction. YAY!
-	sw $ra, 0($sp)
-	jal find_angle_to_point
-	sw $v0, ANGLE($zero)
-	add $t0, $zero, 1
-	sw $t0, ANGLE_CONTROL($zero)
-	lw $ra, 0($sp)
-	add $sp, $sp, 4
-	jr $ra
-	
-
-find_angle_to_point:  					#So this function takes $a0 = destination x and $a1 = destination y 
-	lw $t0, BOT_X($zero)		  	  # and returns $v0 = absolute angle needed to get to that point
-	lw $t1, BOT_Y($zero)
-	sub $a0, $a0, $t0
-	sub $a1, $a1, $t1
-	move $s0, $ra
-	jal sb_arctan
-	move $ra, $s0
-	jr $ra
-
-#THIS IS ALL THE EUCLIDEAN STUFF I COPIED
 
 ## bool
 ## rule1(unsigned short board[GRID_SQUARED][GRID_SQUARED]) {
@@ -442,6 +289,160 @@ get_square_begin:
 
 
 
+
+
+
+
+
+.kdata	# interrupt handler data (separated just for readability)
+chunkIH:	.space 166666	
+non_intrpt_str:	.asciiz "Non-interrupt exception\n"
+unhandled_str:	.asciiz "Unhandled interrupt type\n"
+
+
+.ktext 0x80000180
+interrupt_handler:
+.set noat
+	move	$k1, $at	# Save $at
+.set at
+	la	$k0, chunkIH
+	sw	$a0, 0($k0)	# Get some free registers
+	sw	$a1, 4($k0)	# by storing them to a global variable
+	sw $v0, 8($k0)
+	sw $t0, 12($k0)
+	sw $t1, 16($k0)
+	sw $v0, 20($k0)
+
+	mfc0	$k0, $13	# Get Cause register
+	srl	$a0, $k0, 2
+	and	$a0, $a0, 0xf	# ExcCode field
+	bne	$a0, 0, non_intrpt
+
+interrupt_dispatch:	# Interrupt:
+	mfc0	$k0, $13	# Get Cause register, again
+	beq	$k0, 0, done	# handled all outstanding interrupts
+	
+	and	$a0, $k0, TIMER_MASK	# is there a timer interrupt?
+	bne	$a0, 0, timer_interrupt
+
+	and	$a0, $k0, COORDS_MASK
+	bne	$a0, 0, coords_interrupt
+
+	and $a0, $k0, BONK_MASK
+	bne $a0, 0, bonk_interrupt
+
+	and $a0, $k0, INVIS_MASK
+	bne $a0, 0, invis_interrupt
+
+	and $a0, $k0, TAG_MASK
+	bne $a0, 0, tag_interrupt
+
+	j	done
+
+coords_interrupt:
+	sw $a1, COORDS_ACKNOWLEDGE
+	sw $a1, COORDS_REQUEST
+
+
+	j	interrupt_dispatch	# see if other interrupts are waiting
+
+timer_interrupt:
+	sw	$a1, TIMER_ACKNOWLEDGE($zero)	# acknowledge interrupt
+	sw $a1, PICK_FLAG($zero)
+	
+	lw $a0, FLAGS_IN_HAND($zero)
+	li $a1, 3
+	blt $a0, $a1, getting_flags_logic
+	jal go_home
+	j request_timer
+getting_flags_logic:
+	la $k0, flags
+	sw $k0, FLAG_REQUEST($zero)  #TODO: optimization: make this find the nearest flag and go to that one
+	lw $a0, 0($k0)
+	li $t0, -1
+	beq $a0, $t0, generate_flag
+	lw $a1, 4($k0)
+	jal goto_point
+
+request_timer:
+	lw	$v0, TIMER	# current time
+	add	$v0, $v0, 2000
+	sw	$v0, TIMER	# request timer 
+
+	j	interrupt_dispatch	# see if other interrupts are waiting
+
+generate_flag:
+	lw $a0, ENERGY($zero)
+	li $t0, 7
+	blt $a0, $t0, out_of_energy
+	sw $t0, GENERATE_FLAG($zero)
+	j getting_flags_logic
+out_of_energy:
+	jal go_home
+	j request_timer
+
+bonk_interrupt:
+	sw $a1, BONK_ACKNOWLEDGE
+
+#If we hit a wall, then we are turning 180 and heading in that direction.
+#We can change this later.
+	li $a0, 180
+	sw $a0, ANGLE($zero)
+	sw $zero, ANGLE_CONTROL($zero)
+	li $a0, 10
+	sw $a0, VELOCITY($zero)
+
+	j interrupt_dispatch
+
+invis_interrupt:						# TODOL make this actually do things
+	sw $a1, INVIS_ACKNOWLEDGE($zero)
+	j interrupt_dispatch
+
+tag_interrupt:							# TODO: make this actually do things
+	sw $a1, TAG_ACKNOWLEDGE($zero)
+	j interrupt_dispatch
+
+non_intrpt:	# was some non-interrupt
+	li	$v0, PRINT_STRING
+	la	$a0, non_intrpt_str
+	syscall	# print out an error message
+	# fall through to done
+
+go_home:
+	sub $sp, $sp, 4
+	sw $ra, 0($sp)
+	li $a0, BASE_X
+	li $a1, BASE_Y
+	jal goto_point
+	lw $ra, 0($sp)
+	add $sp, $sp, 4
+	jr $ra
+
+	
+goto_point:						#Take $a0 = destination x and $a1 = destination y and sets Spimbot on a crash
+	sub $sp, $sp, 4				# course in that direction. YAY!
+	sw $ra, 0($sp)
+	jal find_angle_to_point
+	sw $v0, ANGLE($zero)
+	add $t0, $zero, 1
+	sw $t0, ANGLE_CONTROL($zero)
+	lw $ra, 0($sp)
+	add $sp, $sp, 4
+	jr $ra
+	
+
+find_angle_to_point:  					#So this function takes $a0 = destination x and $a1 = destination y 
+	lw $t0, BOT_X($zero)		  	  # and returns $v0 = absolute angle needed to get to that point
+	lw $t1, BOT_Y($zero)
+	sub $a0, $a0, $t0
+	sub $a1, $a1, $t1
+	move $s0, $ra
+	jal sb_arctan
+	move $ra, $s0
+	jr $ra
+
+#THIS IS ALL THE EUCLIDEAN STUFF I COPIED
+
 # -----------------------------------------------------------------------
 # sb_arctan - computes the arctangent of y / x
 # $a0 - x
@@ -523,6 +524,8 @@ done:
 	lw	$a1, 4($k0)
 	lw $v0, 8($k0)
 	lw $t0, 12($k0)
+	lw $t1, 16($k0)
+	lw $v0, 20($k0)
 .set noat
 	move	$at, $k1	# Restore $at
 .set at
