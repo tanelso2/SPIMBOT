@@ -6,6 +6,8 @@ F180:	.float  180.0
 	
 .align 2
 flags: .space 320 #reserves a block that can hold 80 ints (40 x,y coord pairs)
+sudoku_board: .space 512
+
 # spimbot constants
 NUM_FLAGS = 40	# maximum flags you can ever have on the board
 BASE_RADIUS = 24
@@ -112,7 +114,7 @@ interrupt_handler:
 interrupt_dispatch:	# Interrupt:
 	mfc0	$k0, $13	# Get Cause register, again
 	beq	$k0, 0, done	# handled all outstanding interrupts
-
+	
 	and	$a0, $k0, TIMER_MASK	# is there a timer interrupt?
 	bne	$a0, 0, timer_interrupt
 
@@ -169,6 +171,15 @@ generate_flag:
 	j getting_flags_logic
 out_of_energy:
 	jal go_home
+	la $a0, sudoku_board
+	sw $a0, SUDOKU_REQUEST($zero) 	# make sudoku request to fill sudoku board, $a0 is also set up to be passed into rule1
+	
+solve: 	
+	la  $a0, sudoku_board					# solve (right now only implemented with rule1, so it's slower than it needs to be)
+	jal rule1
+	bne $v0, $zero, solve
+	la 	$a0, sudoku_board
+	sw 	$a0, SUDOKU_SOLVED($zero) 	# get 25 energy points (if the solver works)
 	j request_timer
 
 bonk_interrupt:
@@ -232,6 +243,204 @@ find_angle_to_point:  					#So this function takes $a0 = destination x and $a1 =
 	jr $ra
 
 #THIS IS ALL THE EUCLIDEAN STUFF I COPIED
+
+## bool
+## rule1(unsigned short board[GRID_SQUARED][GRID_SQUARED]) {
+##   bool changed = false;
+##   for (int i = 0 ; i < GRID_SQUARED ; ++ i) {
+##     for (int j = 0 ; j < GRID_SQUARED ; ++ j) {
+##       unsigned value = board[i][j];
+##       if (has_single_bit_set(value)) {
+##         for (int k = 0 ; k < GRID_SQUARED ; ++ k) {
+##           // eliminate from row
+##           if (k != j) {
+##             if (board[i][k] & value) {
+##               board[i][k] &= ~value;
+##               changed = true;
+##             }
+##           }
+##           // eliminate from column
+##           if (k != i) {
+##             if (board[k][j] & value) {
+##               board[k][j] &= ~value;
+##               changed = true;
+##             }
+##           }
+##         }
+## 
+##         // elimnate from square
+##         int ii = get_square_begin(i);
+##         int jj = get_square_begin(j);
+##         for (int k = ii ; k < ii + GRIDSIZE ; ++ k) {
+##           for (int l = jj ; l < jj + GRIDSIZE ; ++ l) {
+##             if ((k == i) && (l == j)) {
+##               continue;
+##             }
+##             if (board[k][l] & value) {
+##               board[k][l] &= ~value;
+##               changed = true;
+##             }
+##           }
+##         }
+##       }
+##     }
+##   }
+##   return changed;
+## }
+
+rule1:
+	sub	$sp, $sp, 32
+	sw 	$ra, 0($sp)
+	sw	$s0, 4($sp)
+	sw	$s1, 8($sp)	
+	sw 	$s2, 12($sp)
+	sw 	$s3, 16($sp)
+	sw 	$s4, 20($sp)		# holds array start ptr
+	sw 	$s5, 24($sp)   		# holds value
+	sw 	$s6, 28($sp)		# k	
+
+	move 	$s4, $a0		# grab onto array ptr
+
+	li 	$s0, 16 		# GRID_SQUARED = constant 16
+	li 	$s1, 0 			# changed = false
+	li 	$s2, -1			
+r1loop1:
+	add 	$s2, $s2, 1		# i = 0, increments i
+	bge 	$s2, $s0, ret_changed
+	li 	$s3, -1			
+r1loop2:
+	add 	$s3, $s3, 1		# j = 0, increments j
+	bge 	$s3, $s0, r1loop1
+	mul 	$t0, $s2, 16		# i*16
+	add 	$t0, $t0, $s3		# i*16 + j
+	sll 	$t0, $t0, 1		# mult by 2 (dealing with halfs)
+	add 	$t0, $s4, $t0		# add indexing to ptr
+	lhu 	$s5, 0($t0)		# value = board[i][j]
+	move 	$a0, $s5
+	jal 	has_single_bit_set 	# $v0 = yes or no
+	beq	$v0, $zero, r1loop2
+	li	$s6, -1	
+r1loop3:
+	add 	$s6, $s6, 1		# k = 0, increments k
+	bge	$s6, $s0, elim_square
+	beq 	$s6, $s3, elim_column	# k != j
+	mul	$t0, $s2, 16		# i*16
+	add 	$t0, $t0, $s6		# i*16 + k
+	sll 	$t0, $t0, 1		# << 1
+	add 	$t0, $t0, $s4		# address of board[i][k]	
+	lhu	$t1, 0($t0)		# board[i][k]
+	and 	$t2, $t1, $s5		# board[i][k] & value
+	beq 	$t2, $zero, elim_column
+	not 	$t2, $s5
+	and 	$t1, $t2, $t1 		# board[i][k] & ~value
+	sh	$t1, 0($t0)		# board[i][k] &= ~value
+	li	$s1, 1			# changed = true
+elim_column:
+	beq 	$s6, $s2, r1loop3	
+	mul	$t0, $s6, 16		# k*16
+	add 	$t0, $t0, $s3		# k*16 + j
+	sll 	$t0, $t0, 1		# << 1
+	add 	$t0, $s4, $t0		# address of board[k][j]
+	lhu 	$t1, 0($t0)		# board[k][j]
+	and	$t2, $t1, $s5		# board[k][j] & value
+	beq 	$t2, $zero, r1loop3	
+	not 	$t2, $s5		# ~value
+	and 	$t1, $t1, $t2		# board[k][j] & ~value
+	sh 	$t1, 0($t0)		# board[k][j] &= ~value
+	li 	$s1, 1			# changed = true
+	j 	r1loop3
+
+elim_square:	
+	move 	$a0, $s2
+	jal 	get_square_begin
+	move 	$s6, $v0		# $s6 = ii = k
+	move 	$a0, $s3
+	jal 	get_square_begin 	# jj = $v0
+	add	$t0, $s6, 4		# $t0 = ii + GRIDSIZE
+	add 	$t1, $v0, 4		# $t1 = jj + GRIDSIZE
+
+	sub 	$s6, $s6, 1 	
+r1loop4:
+	add 	$s6, $s6, 1		# increments k
+	bge	$s6, $t0, r1loop2	# k < ii + GRIDSIZE
+	move 	$t2, $v0 		# l = jj
+	sub 	$t2, $t2, 1
+r1loop5:
+	add 	$t2, $t2, 1		# increment l
+	bge 	$t2, $t1, r1loop4
+	xor 	$t3, $s6, $s2
+	xor 	$t4, $t2, $s3		
+	or 	$t4, $t4, $t3		
+	beq	$t4, $zero, r1loop5	# if k==i and l==j continue
+	mul	$t5, $s6, 16 		# k*16
+	add 	$t5, $t5, $t2		# k*16 + l
+	sll 	$t5, $t5, 1		# << 1
+	add 	$t5, $s4, $t5 		# holds address of board[k][l]
+	lhu 	$t6, 0($t5)		# board[k][l]
+	and 	$t7, $t6, $s5		# board[k][l] & value
+	beq 	$t7, $zero, r1loop5	
+	not 	$t7, $s5 		# ~value
+	and 	$t6, $t6, $t7		# board[k][l] & ~value
+	sh 	$t6, 0($t5)		# board[k][l] &= ~value
+	li 	$s1, 1			# changed = true
+	j 	r1loop5
+
+ret_changed:
+	move 	$v0, $s1		# changed data moved into return reg
+	lw      $ra, 0($sp)
+        lw      $s0, 4($sp)
+        lw      $s1, 8($sp)
+        lw      $s2, 12($sp)
+        lw      $s3, 16($sp)
+        lw      $s4, 20($sp)          
+        lw      $s5, 24($sp)          
+        lw      $s6, 28($sp)           
+	
+	add 	$sp, $sp, 32
+
+	jr	$ra
+
+has_single_bit_set:
+	bne 	$a0, $zero, other_if	# test if value equals zero
+	move 	$v0, $zero				# if so, return 0 (data flow)
+	jr 		$ra						# return to calling function (control flow)
+other_if:	
+	add 	$t0, $a0, -1 			# $t0 = value - 1
+	and 	$t0, $a0, $t0			# $t0 = value & (value - 1)
+	beq 	$t0, $zero, return_1	# test if value & (value - 1) is 1
+	move 	$v0, $zero				# return 0 (data flow)
+	jr 		$ra						# return to calling function (control flow)
+return_1: 
+	li 		$v0, 1					# return 1
+	jr		$ra						# return to caller
+
+
+get_lowest_set_bit:
+	li 		$t0, 0					# $t0 = 0 ($t0 is i)
+	li 		$t1, 16					# $t1 = 16 ($t1 is 16)
+loop:	
+	bge 	$t0, $t1, return_0		# test if i < 16
+	li 		$t3, 1					# $t3 = 1
+	sll 	$t2, $t3, $t0			# $t2 = 1 << i
+	and 	$t4, $a0, $t2			# $t4 = value & (1 << i)
+	beq 	$t4, $zero, incr_1 		# test if $t4 is 1
+	move 	$v0, $t0				# return i
+	jr 		$ra
+incr_1: 
+	add 	$t0, $t0, 1				# increment i
+	j 		loop					# jump back to test the condition in the foor loop
+
+return_0:
+	move 	$v0, $zero				# return 0
+	jr 		$ra
+
+get_square_begin:
+	# round down to the nearest multiple of 4
+	and	$v0, $a0, 0xfffffffc
+	jr	$ra
+
+
+
 
 # -----------------------------------------------------------------------
 # sb_arctan - computes the arctangent of y / x
