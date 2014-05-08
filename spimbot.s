@@ -432,10 +432,14 @@ request_timer:
 	j	interrupt_dispatch	# see if other interrupts are waiting
 
 generate_flag:
+	li $t0, 7	
 	lw $a0, ENERGY($zero)
-	li $t0, 7
 	blt $a0, $t0, out_of_energy
+more_flags:
 	sw $t0, GENERATE_FLAG($zero)
+	lw $a0, ENERGY($zero)
+	bgt $a0, 7, more_flags 	# generate as many flags as possible at the moment
+	
 	j getting_flags_logic
 out_of_energy:
 	jal go_home
