@@ -7,6 +7,7 @@ F180:	.float  180.0
 .align 2
 flags: .space 320 #reserves a block that can hold 80 ints (40 x,y coord pairs)
 sudoku_board: .space 512
+symbollist: .ascii  "0123456789ABCDEFG"
 
 # spimbot constants
 NUM_FLAGS = 40	# maximum flags you can ever have on the board
@@ -86,6 +87,7 @@ solve:
 	bne $v0, $zero, solve
 	la 	$a0, sudoku_board
 	jal print_board
+	la $a0, sudoku_board
 	sw 	$a0, SUDOKU_SOLVED($zero) 	# get 25 energy points (if the solver works)
 	j pickup_loop		# I thought of is to find the Euclidean distance
 						#in the timer interrupt and then triggering the PICK_FLAG
