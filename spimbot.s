@@ -85,6 +85,7 @@ solve:
 	jal rule1
 	bne $v0, $zero, solve
 	la 	$a0, sudoku_board
+	jal print_board
 	sw 	$a0, SUDOKU_SOLVED($zero) 	# get 25 energy points (if the solver works)
 	j pickup_loop		# I thought of is to find the Euclidean distance
 						#in the timer interrupt and then triggering the PICK_FLAG
@@ -289,6 +290,59 @@ get_square_begin:
 
 
 
+print_board:
+	sub	$sp, $sp, 20
+	sw	$ra, 0($sp)		# save $ra and free up 4 $s registers for
+	sw	$s0, 4($sp)		# i
+	sw	$s1, 8($sp)		# j
+	sw	$s2, 12($sp)		# the function argument
+	sw	$s3, 16($sp)		# the computed pointer (which is used for 2 calls)
+	move	$s2, $a0
+
+	li	$s0, 0			# i
+pb_loop1:
+	li	$s1, 0			# j
+pb_loop2:
+	mul	$t0, $s0, 16		# i*16
+	add	$t0, $t0, $s1		# (i*16)+j
+	sll	$t0, $t0, 1		# ((i*16)+j)*2
+	add	$s3, $s2, $t0
+	lhu	$a0, 0($s3)
+	jal	has_single_bit_set		
+	beq	$v0, 0, pb_star		# if it has more than one bit set, jump
+	lhu	$a0, 0($s3)
+	jal	get_lowest_set_bit	# 
+	add	$v0, $v0, 1		# $v0 = num
+	la	$t0, symbollist
+	add	$a0, $v0, $t0		# &symbollist[num]
+	lb	$a0, 0($a0)		#  symbollist[num]
+	li	$v0, 11
+	syscall
+	j	pb_cont
+
+pb_star:		
+	li	$v0, 11			# print a "*"
+	li	$a0, '*'
+	syscall
+
+pb_cont:	
+	add	$s1, $s1, 1		# j++
+	blt	$s1, 16, pb_loop2
+
+	li	$v0, 11			# at the end of a line, print a newline char.
+	li	$a0, '\n'
+	syscall	
+	
+	add	$s0, $s0, 1		# i++
+	blt	$s0, 16, pb_loop1
+
+	lw	$ra, 0($sp)		# restore registers and return
+	lw	$s0, 4($sp)
+	lw	$s1, 8($sp)
+	lw	$s2, 12($sp)
+	lw	$s3, 16($sp)
+	add	$sp, $sp, 20
+	jr	$ra
 
 
 
@@ -312,6 +366,10 @@ interrupt_handler:
 	sw $t0, 12($k0)
 	sw $t1, 16($k0)
 	sw $v0, 20($k0)
+	sw $s0, 24($k0)
+	sw $ra, 28($k0)
+
+
 
 	mfc0	$k0, $13	# Get Cause register
 	srl	$a0, $k0, 2
@@ -526,6 +584,9 @@ done:
 	lw $t0, 12($k0)
 	lw $t1, 16($k0)
 	lw $v0, 20($k0)
+	lw $s0, 24($k0)
+	lw $ra, 28($k0)
+
 .set noat
 	move	$at, $k1	# Restore $at
 .set at
