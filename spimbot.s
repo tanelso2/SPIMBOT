@@ -418,12 +418,15 @@ timer_interrupt:
 	j request_timer
 getting_flags_logic:
 	la $k0, flags
-	sw $k0, FLAG_REQUEST($zero)  #TODO: optimization: make this find the nearest flag and go to that one
-	lw $a0, 0($k0)
+	sw $k0, FLAG_REQUEST($zero)  # finds the nearest flag and goes to that one
+	lw $a0, 24($k0) # look 3 flags ahead
 	li $t0, -1
 	beq $a0, $t0, generate_flag
+find_closest:
 	lw $a1, 4($k0)
+	lw $a0, 0($k0)	# setup first flag's x and y
 	
+
 	# now $a0 contains a flag's x coord and $a1 contains a flag's y coord
 	# let's find it's euclidean distance from the bot and consider that the minimum distance of the bot to a flag
 	# then do a findmin over the available flags
@@ -497,9 +500,13 @@ more_flags:
 	
 	j getting_flags_logic
 out_of_energy:
+	lw $t0, 0($k0) # are there any flags left on the board?	
+	blt $t0, $zero, home # 	if not, head home
+	j find_closest			# if so, find them
+home:
 	jal go_home
-	j request_timer
-
+	j timer_interrupt
+		
 bonk_interrupt:
 	sw $a1, BONK_ACKNOWLEDGE
 
