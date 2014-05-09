@@ -428,59 +428,60 @@ getting_flags_logic:
 	# let's find it's euclidean distance from the bot and consider that the minimum distance of the bot to a flag
 	# then do a findmin over the next 4 available flags. 4 is arbitrary and could be adjusted for optimization
 
-#	$sp, $sp, 28  		## grab some stack space to store min_dist and best x and y coords
-#    sw 	$a0, 0($sp)		## best x
-#	sw 	$a1, 4($sp)		## best y
-#	sw 	$s0, 12($sp)
-#	sw 	$s1, 16($sp)
-#	sw 	$s2, 20($sp)
-#	sw 	$s3, 24($sp)
-#
-#
-#	add $s3, $k0, 24 		# holds location of flags tuple  5 away from start
-#
-#	lw 	$t0, BOT_X($zero)
-#	lw	$t1, BOT_Y($zero) ## my bot's x, y
-#
-#	sub $a0, $a0, $t0
-#	sub $a1, $a1, $t1	## get x difference and y difference
-#	
-#	jal euclidean_dist
-#	sw  $v0, 8($sp)		## arbitrarily consider distance to first available flag the minumum distance for now
-#	
-#	# iterate through 4 of the next available flags while checking that they exist
-#	la  $s0, flags
-#	add $s0, $s0, 8		# jump over the first available flag to look at the rest of the list
-#check_better:
-#	lw 	$s1, 0($s0) 	# load next available x 
-#	lw 	$s2, 4($s0) 	# load next available y
-#	lw	$a0, BOT_X($zero)
-#	lw 	$a1, BOT_Y($zero)	# get current x and y of bot
-#	sub $a0, $a0, $s1
-#	sub $a1, $a1, $s2
-#	jal euclidean_dist
-#	lw 	$t3, 8($sp)		# is new dist < min_dist?
-#	bgt $v0, $t3, next_flag
-#	sw 	$v0, 8($sp)		## if so, store new_dist, best x, and best_y
-#	sw 	$s1, 0($sp)
-#	sw  $s2, 4($sp)
-#next_flag:
-#	add $s0, $s0, 8
-#	beq $s0, $s3, go_to_closest
-#	j check_better	
-#
-#go_to_closest:
-#	
-#	lw $a0, 0($sp) 	# grab best x
-#	lw $a1, 4($sp) 	# grab best y
-#
-#	# restore stack
-#                  
-#    lw  $s0, 12($sp)
-#    lw  $s1, 16($sp)
-#    lw  $s2, 20($sp)
-#    lw  $s3, 24($sp)
-#	add $sp, $sp, 28      
+	sub $sp, $sp, 28  		## grab some stack space to store min_dist and best x and y coords
+    sw 	$a0, 0($sp)		## best x
+	sw 	$a1, 4($sp)		## best y
+	sw 	$s0, 12($sp)
+	sw 	$s1, 16($sp)
+	sw 	$s2, 20($sp)
+	sw 	$s3, 24($sp)
+
+
+	add $s3, $k0, 24 		# holds location of flags tuple  5 away from start
+
+	lw 	$t0, BOT_X($zero)
+	lw	$t1, BOT_Y($zero) ## my bot's x, y
+
+	sub $a0, $a0, $t0
+	sub $a1, $a1, $t1	## get x difference and y difference
+	
+	jal euclidean_dist
+	sw  $v0, 8($sp)		## arbitrarily consider distance to first available flag the minumum distance for now
+	
+	# iterate through 4 of the next available flags while checking that they exist
+	la  $s0, flags
+	add $s0, $s0, 8		# jump over the first available flag to look at the rest of the list
+check_better:
+	lw 	$s1, 0($s0) 	# load next available x 
+	lw 	$s2, 4($s0) 	# load next available y
+   blt $s2, $zero, go_to_closest
+	lw	$a0, BOT_X($zero)
+	lw 	$a1, BOT_Y($zero)	# get current x and y of bot
+	sub $a0, $a0, $s1
+	sub $a1, $a1, $s2
+	jal euclidean_dist
+	lw 	$t3, 8($sp)		# is new dist < min_dist?
+	bgt $v0, $t3, next_flag
+	sw 	$v0, 8($sp)		## if so, store new_dist, best x, and best_y
+	sw 	$s1, 0($sp)
+	sw  $s2, 4($sp)
+next_flag:
+	add $s0, $s0, 8
+	beq $s0, $s3, go_to_closest
+	j check_better	
+
+go_to_closest:
+	
+	lw $a0, 0($sp) 	# grab best x
+	lw $a1, 4($sp) 	# grab best y
+
+	# restore stack
+                  
+    lw  $s0, 12($sp)
+    lw  $s1, 16($sp)
+    lw  $s2, 20($sp)
+    lw  $s3, 24($sp)
+	add $sp, $sp, 28      
 
 	jal goto_point
 
