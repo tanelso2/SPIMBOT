@@ -76,6 +76,12 @@ main:
 	add $t0, $t0, 10
 	sw $t0, TIMER($zero) #requesting an interrupt because I put most of the logic in the interrupt handler
 
+	# start monitoring other bot's location
+#	sw $t0, COORDS_REQUEST($zero)
+
+	# start going invisible
+#	sw $t0, ACTIVATE_INVIS($zero)
+
 pickup_loop:
 	sw $t4, PICK_FLAG($zero)		#so instead of this loop, another thing
 	la $a0, sudoku_board
@@ -86,12 +92,11 @@ solve:
 	jal rule1
 	bne $v0, $zero, solve
 	la 	$a0, sudoku_board
-	jal print_board
+	jal print_board			# for debugging
 	la $a0, sudoku_board
 	sw 	$a0, SUDOKU_SOLVED($zero) 	# get 25 energy points (if the solver works)
-	j pickup_loop		# I thought of is to find the Euclidean distance
-						#in the timer interrupt and then triggering the PICK_FLAG
-						# when it's lower than a certain threshold. That would probably be better
+	j pickup_loop	
+				
 
 
 ## bool
@@ -238,14 +243,14 @@ r1loop5:
 ret_changed:
 	move 	$v0, $s1		# changed data moved into return reg
 	lw      $ra, 0($sp)
-        lw      $s0, 4($sp)
-        lw      $s1, 8($sp)
-        lw      $s2, 12($sp)
-        lw      $s3, 16($sp)
-        lw      $s4, 20($sp)          
-        lw      $s5, 24($sp)          
-        lw      $s6, 28($sp)           
-	
+    lw      $s0, 4($sp)
+    lw      $s1, 8($sp)
+    lw      $s2, 12($sp)
+    lw      $s3, 16($sp)
+    lw      $s4, 20($sp)          
+    lw      $s5, 24($sp)          
+    lw      $s6, 28($sp)           
+
 	add 	$sp, $sp, 32
 
 	jr	$ra
@@ -401,10 +406,31 @@ interrupt_dispatch:	# Interrupt:
 	j	done
 
 coords_interrupt:
-	sw $a1, COORDS_ACKNOWLEDGE
-	sw $a1, COORDS_REQUEST
+	sw $a1, COORDS_ACKNOWLEDGE($zero)
+	sw $a1, COORDS_REQUEST($zero)
+	
+	lw $a0, OTHER_BOT_X($zero)
+	lw $a1, OTHER_BOT_Y($zero) ## get competitor's location
+	
+	lw $t0, BOT_X($zero)
+	lw $t1, BOT_Y($zero)	## get my location
+	
+	sub $a0, $a0, $t0
+	sub $a1, $a1, $t1		# get x and y differences
+	
+	jal euclidean_dist		# find euclidean distance away
+	bgt $v0, 10, were_fine  # if we're greater then 10 units away, no worries
+	
+	# else, go invisible and continue collecting flags
+	mfc0 $a1, $13
+	and $a0, $a1, INVIS_MASK
+	beq $zero, $a0, were_fine 	# if we can't call another insibility interrupt
+								# we're fine   
+	
+	sw  $zero, INVIS_ACKNOWLEDGE($zero)
+	sw 	$zero, ACTIVATE_INVIS($zero)
 
-
+were_fine:
 	j	interrupt_dispatch	# see if other interrupts are waiting
 
 timer_interrupt:
