@@ -426,19 +426,15 @@ getting_flags_logic:
 	
 	# now $a0 contains a flag's x coord and $a1 contains a flag's y coord
 	# let's find it's euclidean distance from the bot and consider that the minimum distance of the bot to a flag
-	# then do a findmin over the next 4 available flags. 4 is arbitrary and could be adjusted for optimization
+	# then do a findmin over the available flags
 
-	sub $sp, $sp, 28  		## grab some stack space to store min_dist and best x and y coords
+	sub $sp, $sp, 24  		## grab some stack space to store min_dist and best x and y coords
     sw 	$a0, 0($sp)		## best x
 	sw 	$a1, 4($sp)		## best y
 	sw 	$s0, 12($sp)
 	sw 	$s1, 16($sp)
 	sw 	$s2, 20($sp)
-	sw 	$s3, 24($sp)
-
-
-	add $s3, $k0, 24 		# holds location of flags tuple  5 away from start
-
+		
 	lw 	$t0, BOT_X($zero)
 	lw	$t1, BOT_Y($zero) ## my bot's x, y
 
@@ -454,7 +450,7 @@ getting_flags_logic:
 check_better:
 	lw 	$s1, 0($s0) 	# load next available x 
 	lw 	$s2, 4($s0) 	# load next available y
-   blt $s2, $zero, go_to_closest
+    blt $s2, $zero, go_to_closest # if we've reached the -1s, we know we're out of flags to investigate so go to the closest
 	lw	$a0, BOT_X($zero)
 	lw 	$a1, BOT_Y($zero)	# get current x and y of bot
 	sub $a0, $a0, $s1
@@ -467,7 +463,6 @@ check_better:
 	sw  $s2, 4($sp)
 next_flag:
 	add $s0, $s0, 8
-	beq $s0, $s3, go_to_closest
 	j check_better	
 
 go_to_closest:
@@ -480,8 +475,7 @@ go_to_closest:
     lw  $s0, 12($sp)
     lw  $s1, 16($sp)
     lw  $s2, 20($sp)
-    lw  $s3, 24($sp)
-	add $sp, $sp, 28      
+    add $sp, $sp, 24      
 
 	jal goto_point
 
