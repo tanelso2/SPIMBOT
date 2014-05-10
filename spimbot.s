@@ -80,14 +80,14 @@ main:
 	sw $t0, TIMER($zero) #requesting an interrupt because I put most of the logic in the interrupt handler
 
 	# start monitoring other bot's location
-	sw $t0, COORDS_REQUEST($zero)
-	lw  $a0, OTHER_BOT_X($zero)         # get other bot's x loc
-    la  $t0, target_x
-    sw  $a0, 0($t0)             # store new target_x
-
-    lw  $a0, OTHER_BOT_Y($zero)         # get other bot's y loc
-    la  $t0, target_y
-    sw  $a0, 0($t0)             # store new target_y
+#	sw $t0, COORDS_REQUEST($zero)
+#	lw  $a0, OTHER_BOT_X($zero)         # get other bot's x loc
+#    la  $t0, target_x
+#    sw  $a0, 0($t0)             # store new target_x
+#
+#    lw  $a0, OTHER_BOT_Y($zero)         # get other bot's y loc
+#    la  $t0, target_y
+#    sw  $a0, 0($t0)             # store new target_y
 
 	# start going invisible
 #	sw $t0, ACTIVATE_INVIS($zero)
