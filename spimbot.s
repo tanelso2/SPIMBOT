@@ -8,6 +8,8 @@ F180:	.float  180.0
 flags: .space 320 #reserves a block that can hold 80 ints (40 x,y coord pairs)
 sudoku_board: .space 512
 symbollist: .ascii  "0123456789ABCDEFG"
+target_x: 	.word 0
+target_y: 	.word 0
 
 # spimbot constants
 NUM_FLAGS = 40	# maximum flags you can ever have on the board
@@ -405,33 +407,21 @@ interrupt_dispatch:	# Interrupt:
 
 	j	done
 
-coords_interrupt:
+# interrupt simply logs the last location of the opponent
+coords_interrupt: 
 	sw $a1, COORDS_ACKNOWLEDGE($zero)
 	sw $a1, COORDS_REQUEST($zero)
-	
-	lw $a0, OTHER_BOT_X($zero)
-	lw $a1, OTHER_BOT_Y($zero) ## get competitor's location
-	
-	lw $t0, BOT_X($zero)
-	lw $t1, BOT_Y($zero)	## get my location
-	
-	sub $a0, $a0, $t0
-	sub $a1, $a1, $t1		# get x and y differences
-	
-	jal euclidean_dist		# find euclidean distance away
-	bgt $v0, 10, were_fine  # if we're greater then 10 units away, no worries
-	
-	# else, go invisible and continue collecting flags
-	mfc0 $a1, $13
-	and $a0, $a1, INVIS_MASK
-	beq $zero, $a0, were_fine 	# if we can't call another insibility interrupt
-								# we're fine   
-	
-	sw  $zero, INVIS_ACKNOWLEDGE($zero)
-	sw 	$zero, ACTIVATE_INVIS($zero)
 
-were_fine:
-	j	interrupt_dispatch	# see if other interrupts are waiting
+
+	lw  $a0, OTHER_BOT_X($zero)         # get other bot's x loc
+    la  $t0, target_x
+    sw  $a0, 0($t0)             # store new target_x
+
+    lw  $a0, OTHER_BOT_Y($zero)         # get other bot's y loc
+    la  $t0, target_y
+    sw  $a0, 0($t0)             # store new target_y
+
+  	j	interrupt_dispatch	# see if other interrupts are waiting
 
 timer_interrupt:
 	sw	$a1, TIMER_ACKNOWLEDGE($zero)	# acknowledge interrupt
