@@ -10,6 +10,7 @@ sudoku_board: .space 512
 symbollist: .ascii  "0123456789ABCDEFG"
 target_x: 	.word 0
 target_y: 	.word 0
+invis_state: .word 0
 
 # spimbot constants
 NUM_FLAGS = 40	# maximum flags you can ever have on the board
@@ -79,7 +80,14 @@ main:
 	sw $t0, TIMER($zero) #requesting an interrupt because I put most of the logic in the interrupt handler
 
 	# start monitoring other bot's location
-#	sw $t0, COORDS_REQUEST($zero)
+	sw $t0, COORDS_REQUEST($zero)
+	lw  $a0, OTHER_BOT_X($zero)         # get other bot's x loc
+    la  $t0, target_x
+    sw  $a0, 0($t0)             # store new target_x
+
+    lw  $a0, OTHER_BOT_Y($zero)         # get other bot's y loc
+    la  $t0, target_y
+    sw  $a0, 0($t0)             # store new target_y
 
 	# start going invisible
 #	sw $t0, ACTIVATE_INVIS($zero)
@@ -413,7 +421,7 @@ coords_interrupt:
 	sw $a1, COORDS_REQUEST($zero)
 
 
-	lw  $a0, OTHER_BOT_X($zero)         # get other bot's x loc
+    lw  $a0, OTHER_BOT_X($zero)         # get other bot's x loc
     la  $t0, target_x
     sw  $a0, 0($t0)             # store new target_x
 
@@ -421,11 +429,79 @@ coords_interrupt:
     la  $t0, target_y
     sw  $a0, 0($t0)             # store new target_y
 
+
+#	lw $t0, BOT_X($zero)
+#	lw $t1, BOT_Y($zero)	## get my location
+
+#	sub $a0, $a0, $t0
+#	sub $a1, $a1, $t1		# get x and y differences
+#
+#	jal euclidean_dist		# find euclidean distance away
+#	bgt $v0, 200, interrupt_dispatch  # if we're greater then 10 units away, no worries
+#
+#	# else, check what invis_state we're in ( a. we've never called it before or b. we have and we're at the behest of the invis interrupt), go invisible and continue collecting flags
+#	
+#	la 	$t0, invis_state
+#	lw 	$a0, 0($t0)
+#	bne $a0, $zero, invis_state1;
+#invis_state0:
+#	sw $zero, ACTIVATE_INVIS($zero)
+#	li $a0, 1
+#	sw $a0, 0($t0)	# go to invis_state 1
+#	j interrupt_dispatch
+###
+###	
+#invis_state1:
+#	mfc0 $a1, $13
+#	and $a0, $a1, INVIS_MASK
+#	beq $zero, $a0, interrupt_dispatch 	# if we can't call another insibility interrupt
+###									# go back to interrupt dispatch
+#	sw  $zero, INVIS_ACKNOWLEDGE($zero)
+#	sw 	$zero, ACTIVATE_INVIS($zero)
+##
   	j	interrupt_dispatch	# see if other interrupts are waiting
 
 timer_interrupt:
 	sw	$a1, TIMER_ACKNOWLEDGE($zero)	# acknowledge interrupt
 	sw $a1, PICK_FLAG($zero)
+
+
+#	la 	$a0, target_x
+#	lw 	$a0, 0($a0)
+#	
+#	la 	$a1, target_y
+#	lw 	$a1, 0($a1)
+#
+#	lw $t0, BOT_X($zero)
+#	lw $t1, BOT_Y($zero)	## get my location
+#
+#	sub $a0, $a0, $t0
+#	sub $a1, $a1, $t1		# get x and y differences
+#
+#	jal euclidean_dist		# find euclidean distance away
+#	bgt $v0, 50, next  # if we're greater then 10 units away, no worries
+
+#	# else, check what invis_state we're in ( a. we've never called it before or b. we have and we're at the behest of the invis interrupt), go invisible and continue collecting flags
+#	
+#	la 	$t0, invis_state
+#	lw 	$a0, 0($t0)
+#	bne $a0, $zero, invis_state1
+#invis_state0:
+#	sw $zero, ACTIVATE_INVIS($zero)
+#	li $a0, 1
+#	sw $a0, 0($t0)	# go to invis_state 1
+#	j next
+###
+###	
+#invis_state1:
+#	mfc0 $a1, $13
+#	and $a0, $a1, INVIS_MASK
+#	beq $zero, $a0, interrupt_dispatch 	# if we can't call another insibility interrupt
+###									# go back to interrupt dispatch
+#	sw  $zero, INVIS_ACKNOWLEDGE($zero)
+#	sw 	$zero, ACTIVATE_INVIS($zero)
+##
+next:
 	
 	lw $a0, FLAGS_IN_HAND($zero)
 	li $a1, 3
@@ -502,7 +578,6 @@ request_timer:
 	lw	$v0, TIMER	# current time
 	add	$v0, $v0, 2000
 	sw	$v0, TIMER	# request timer 
-
 	j	interrupt_dispatch	# see if other interrupts are waiting
 
 generate_flag:
@@ -538,7 +613,41 @@ bonk_interrupt:
 
 invis_interrupt:						# TODOL make this actually do things
 	sw $a1, INVIS_ACKNOWLEDGE($zero)
-	j interrupt_dispatch
+
+#    lw $t0, BOT_X($zero)
+#    lw $t1, BOT_Y($zero)    ## get my location
+#
+#	
+#
+#	# set a counter to scan whether or not our bot is getting closer to the last location
+#	# of the competitor
+#	li 	$t2, 0
+#	
+#
+#	# scan whether we're getting closer to last location of competitor
+#rescan:
+#	bgt $t2, 10, interrupt_dispatch 
+#	la 	$a0, target_x
+#	lw 	$a0, 0($a0)
+#	
+#	la 	$a1, target_y
+#	lw 	$a1, 0($a1)
+#	
+#    sub $a0, $a0, $t0
+#    sub $a1, $a1, $t1       # get x and y differences
+#
+#    jal euclidean_dist      # find euclidean distance away
+#
+#	add $t2, $t2, 1 		# increment counter
+#    bgt $v0, 100, rescan
+#	
+#   
+#	
+#    sw  $zero, ACTIVATE_INVIS($zero)
+
+    j   interrupt_dispatch  # see if other interrupts are waiting
+
+
 
 tag_interrupt:							# TODO: make this actually do things
 	sw $a1, TAG_ACKNOWLEDGE($zero)
