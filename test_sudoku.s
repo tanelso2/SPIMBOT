@@ -364,9 +364,6 @@ ret_changed:
 ## }
 
 rule2:
-	li	$v0, 0
-	jr	$ra
-
 	sub		$sp, $sp, 36		
 	sw		$ra, 0($sp)
 	sw		$s0, 4($sp)
@@ -400,11 +397,11 @@ r2for2:
 	lhu 	$s5, 0($s7)				# value = board[i][j]
 	move 	$a0, $s5
 	jal 	has_single_bit_set 		# $v0 = yes or no
-	beq		$v0, $zero, r2for2		# continue
+	beq		$v0, 1, r2for2		# continue  #####################################
 
 	li		$t0, 0					# jsum = 0
 	li		$t1, 0					# isum = 0
-	li		$t3, 0					# k=-1
+	li		$t3, -1					# k=-1
 
 r2kloop:
 	add		$t3, $t3, 1				# k++
@@ -455,7 +452,7 @@ r2columnDone:
 	jal		get_square_begin
 	move	$t0, $v0			# ii
 	move	$a0, $s4
-	jal		get_sqaure_begin
+	jal		get_square_begin
 	move	$t1, $v0			# jj
 	li		$t6, 0				# sum = 0
 
