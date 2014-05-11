@@ -80,14 +80,14 @@ main:
 	sw $t0, TIMER($zero) #requesting an interrupt because I put most of the logic in the interrupt handler
 
 	# start monitoring other bot's location
-#	sw $t0, COORDS_REQUEST($zero)
-#	lw  $a0, OTHER_BOT_X($zero)         # get other bot's x loc
-#    la  $t0, target_x
-#    sw  $a0, 0($t0)             # store new target_x
-#
-#    lw  $a0, OTHER_BOT_Y($zero)         # get other bot's y loc
-#    la  $t0, target_y
-#    sw  $a0, 0($t0)             # store new target_y
+	sw $t0, COORDS_REQUEST($zero)
+	lw  $a0, OTHER_BOT_X($zero)         # get other bot's x loc
+    la  $t0, target_x
+    sw  $a0, 0($t0)             # store new target_x
+
+    lw  $a0, OTHER_BOT_Y($zero)         # get other bot's y loc
+    la  $t0, target_y
+    sw  $a0, 0($t0)             # store new target_y
 
 	# start going invisible
 #	sw $t0, ACTIVATE_INVIS($zero)
@@ -97,10 +97,20 @@ pickup_loop:
 	la $a0, sudoku_board
 	sw $a0, SUDOKU_REQUEST($zero) 	# make sudoku request to fill sudoku board, $a0 is also set up to be passed into rule1
 	
+	sub 	$sp, $sp, 4
+	
 solve: 	
 	la  $a0, sudoku_board					# solve (right now only implemented with rule1, so it's slower than it needs to be)
 	jal rule1
-	bne $v0, $zero, solve
+	sw	$v0, 0($sp)			# store result to memory so it can't be corrupted
+	la	$a0, sudoku_board
+	jal rule2
+	lw 	$t0, 0($sp)
+	or 	$t0, $v0, $t0
+	bne $t0, $zero, solve
+	
+	add 	$sp, $sp, 4
+
 	la 	$a0, sudoku_board
 	jal print_board			# for debugging
 	la $a0, sudoku_board
@@ -304,7 +314,155 @@ get_square_begin:
 	and	$v0, $a0, 0xfffffffc
 	jr	$ra
 
+rule2:
+	sub		$sp, $sp, 36		
+	sw		$ra, 0($sp)
+	sw		$s0, 4($sp)
+	sw		$s1, 8($sp)
+	sw		$s2, 12($sp)
+	sw		$s3, 16($sp)
+	sw		$s4, 20($sp)
+	sw		$s5, 24($sp)
+	sw		$s6, 28($sp)
+	sw		$s7, 32($sp)
 
+	move 	$s0, $a0			#&board[0][0]
+
+	li		$s1, 0				#changed = false
+	li		$s2, -1				#i=-1
+	li		$s3, 16				#GRID_SQUARED
+
+r2for1:
+	add		$s2, $s2, 1			#i++
+	bge		$s2, $s3, r2return
+
+	li		$s4, -1				#j=-1
+r2for2:
+	add		$s4, $s4, 1			#j++
+	bge		$s4, $s3, r2endFor2
+
+	mul 	$t0, $s2, 16			# i*16
+	add 	$t0, $t0, $s4			# i*16 + j
+	sll 	$t0, $t0, 1				# mult by 2 (dealing with halfs)
+	add 	$s7, $s0, $t0			# add indexing to ptr
+	lhu 	$s5, 0($s7)				# value = board[i][j]
+	move 	$a0, $s5
+	jal 	has_single_bit_set 		# $v0 = yes or no
+	beq		$v0, 1, r2for2		# continue  #####################################
+
+	li		$t0, 0					# jsum = 0
+	li		$t1, 0					# isum = 0
+	li		$t3, -1					# k=-1
+
+r2kloop:
+	add		$t3, $t3, 1				# k++
+	bge		$t3, $s3, r2endkloop
+
+	beq		$t3, $s4, r2keqj
+	mul		$t4, $s2, 16		# i*16
+	add		$t4, $t4, $t3		# i*16+k
+	sll		$t4, $t4, 1			# *2
+	add		$t4, $t4, $s0
+	lhu		$t4, 0($t4) 		# board[i][k]
+	or		$t0, $t0, $t4		# jsum |= board[i][k] 
+r2keqj:
+	beq		$t3, $s2, r2keqi
+	# isum |= board[k][j]
+	mul		$t4, $t3, 16		# k*16
+	add		$t4, $t4, $s4		# k*16+j
+	sll		$t4, $t4, 1			# *2
+	add		$t4, $t4, $s0	
+	lhu		$t4, 0($t4)			# board[k][j]
+	or		$t1, $t1, $t4		# isum |= board[k][j]
+r2keqi:
+	j		r2kloop
+r2endkloop:
+	
+	# ALL_VALUES = (1 << GRID_SQUARED) - 1
+
+	li		$s6, 1
+	sll		$s6, $s6, 16
+	sub		$s6, $s6, 1			# ALL_VALUES
+
+	beq		$s6,$t0, r2rowDone
+	not		$t4, $t0			# ~jsum
+	and		$t4, $s6, $t4
+	sh		$t4, 0($s7)			# board[i][j] = ALL_VALUES & ~jsum
+	li		$s1, 1				# changed = true
+	j		r2for2				# continue
+r2rowDone:
+	beq		$s6, $t1, r2columnDone
+	not		$t4, $t1			# ~isum
+	and		$t4, $s6, $t4
+	sh		$t4, 0($s7)			# board[i][j] = ALL_VALUES & ~isum
+	li		$s1, 1				# changed = true
+	j		r2for2				# continue
+r2columnDone:
+
+	move	$a0, $s2
+	jal		get_square_begin
+	move	$t0, $v0			# ii
+	move	$a0, $s4
+	jal		get_square_begin
+	move	$t1, $v0			# jj
+	li		$t6, 0				# sum = 0
+
+	move	$t2, $t0			# k = ii
+	add		$t3, $t2, 4			# ii+GRIDSIZE
+r2kloop2:
+	bge		$t2, $t3, r2endk2
+	
+	move	$t4, $t1			# l = jj
+	add		$t5, $t4, 4			# jj+GRIDSIZE
+r2lloop:
+	bge		$t4, $t5, r2endL
+		
+
+	bne		$t2, $s2, r2dontContinue
+	bne		$t4, $s4, r2dontContinue
+	add		$t4, $t4, 1
+	j		r2lloop
+r2dontContinue:
+
+	# board[k][l]
+	mul		$t7, $t2, 16		# k*16
+	add		$t7, $t7, $t4		# k*16+l
+	sll		$t7, $t7, 1			# *2
+	add		$t7, $t7, $s0		# &board[k][l]
+	lhu		$t7, 0($t7)			# board[k][l]
+	or		$t6, $t6, $t7		# sum |= board[k][l]
+
+	add		$t4, $t4, 1
+	j		r2lloop
+r2endL:
+
+	add		$t2, $t2, 1
+	j		r2kloop2
+r2endk2:
+
+	beq		$s6, $t6, r2for2
+	not		$t0, $t6			# ~sum
+	and		$t0, $s6, $t0		# ALL_VALUES & ~sum
+	sh		$t0, 0($s7)
+	li		$s1, 1
+
+	j 		r2for2
+r2endFor2:
+	j		r2for1
+r2return:
+
+	move	$v0, $s1			# move changed to return reg
+	lw		$ra, 0($sp)
+	lw		$s0, 4($sp)
+	lw		$s1, 8($sp)
+	lw		$s2, 12($sp)
+	lw		$s3, 16($sp)
+	lw		$s4, 20($sp)
+	lw		$s5, 24($sp)
+	lw		$s6, 28($sp)
+	lw		$s7, 32($sp)
+	add		$sp, $sp, 36
+	jr		$ra
 
 
 print_board:
@@ -480,7 +638,7 @@ timer_interrupt:
 #
 #	jal euclidean_dist		# find euclidean distance away
 #	bgt $v0, 50, next  # if we're greater then 10 units away, no worries
-
+#
 #	# else, check what invis_state we're in ( a. we've never called it before or b. we have and we're at the behest of the invis interrupt), go invisible and continue collecting flags
 #	
 #	la 	$t0, invis_state
@@ -614,36 +772,36 @@ bonk_interrupt:
 invis_interrupt:						# TODOL make this actually do things
 	sw $a1, INVIS_ACKNOWLEDGE($zero)
 
-#    lw $t0, BOT_X($zero)
-#    lw $t1, BOT_Y($zero)    ## get my location
-#
-#	
-#
-#	# set a counter to scan whether or not our bot is getting closer to the last location
-#	# of the competitor
-#	li 	$t2, 0
-#	
-#
-#	# scan whether we're getting closer to last location of competitor
-#rescan:
-#	bgt $t2, 10, interrupt_dispatch 
-#	la 	$a0, target_x
-#	lw 	$a0, 0($a0)
-#	
-#	la 	$a1, target_y
-#	lw 	$a1, 0($a1)
-#	
-#    sub $a0, $a0, $t0
-#    sub $a1, $a1, $t1       # get x and y differences
-#
-#    jal euclidean_dist      # find euclidean distance away
-#
-#	add $t2, $t2, 1 		# increment counter
-#    bgt $v0, 100, rescan
-#	
-#   
-#	
-#    sw  $zero, ACTIVATE_INVIS($zero)
+    lw $t0, BOT_X($zero)
+    lw $t1, BOT_Y($zero)    ## get my location
+
+	
+
+	# set a counter to scan whether or not our bot is getting closer to the last location
+	# of the competitor
+	li 	$t2, 0
+	
+
+	# scan whether we're getting closer to last location of competitor
+rescan:
+	bgt $t2, 10, interrupt_dispatch 
+	la 	$a0, target_x
+	lw 	$a0, 0($a0)
+	
+	la 	$a1, target_y
+	lw 	$a1, 0($a1)
+	
+    sub $a0, $a0, $t0
+    sub $a1, $a1, $t1       # get x and y differences
+
+    jal euclidean_dist      # find euclidean distance away
+
+	add $t2, $t2, 1 		# increment counter
+    bgt $v0, 100, rescan
+	
+   
+	
+    sw  $zero, ACTIVATE_INVIS($zero)
 
     j   interrupt_dispatch  # see if other interrupts are waiting
 
