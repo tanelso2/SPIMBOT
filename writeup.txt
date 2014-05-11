@@ -15,3 +15,7 @@ flags remaining on the board, we try to generate as many more as possible, exhau
 our energy and adding to our pool of flags. We give our bot as many flags to choose 
 from as we are able with the idea our bot will spend less time hopscotching the map 
 because it has more options that are potentially nearby.
+
+We solve sudoku puzzles with rule1 and rule2. This drastically increases the
+rate at which we are able to solve puzzles (versus merely using rule1) and
+therefore provides us a steady stream of energy.
