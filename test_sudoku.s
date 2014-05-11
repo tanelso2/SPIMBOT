@@ -135,18 +135,21 @@ get_square_begin:
 
 	
 solve:	
-	sub $sp, $sp, 4
+	sub $sp, $sp, 8
 	sw $ra, 0($sp)
+	sw $s0, 4($sp)
 
 again:	la  $a0, hard_board
 	jal 	rule1
-	move	$t0, $v0		#store output from rule1
+	move	$s0, $v0		#store output from rule1
 	la		$a0, hard_board
 	jal		rule2
-	or		$t0, $v0, $t0
+	or		$t0, $v0, $s0
 	bne $t0, $zero, again
+	
+	lw $s0, 4($sp)
 	lw $ra, 0($sp)
-	add $sp, $sp, 4
+	add $sp, $sp, 8
 	jr	$ra
 
 
