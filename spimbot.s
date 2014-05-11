@@ -94,6 +94,17 @@ main:
 
 pickup_loop:
 	sw $t4, PICK_FLAG($zero)		#so instead of this loop, another thing
+#	lw  $t0, FLAGS_IN_HAND($zero)
+#
+#    li  $t1, 3
+#    ble $t0, $t1, ok1
+#
+#    sw  $zero, ACTIVATE_INVIS($zero)
+#
+
+ok1:
+
+
 	la $a0, sudoku_board
 	sw $a0, SUDOKU_REQUEST($zero) 	# make sudoku request to fill sudoku board, $a0 is also set up to be passed into rule1
 	
@@ -110,11 +121,25 @@ solve:
 	bne $t0, $zero, solve
 	
 	add 	$sp, $sp, 4
-
+#
+#	lw  $t0, FLAGS_IN_HAND($zero)
+#	
+#	li 	$t1, 3
+#	ble $t0, $t1, ok
+#	
+#	sw 	$zero, ACTIVATE_INVIS($zero)
+#
+#
+ok:
 	la 	$a0, sudoku_board
 	jal print_board			# for debugging
 	la $a0, sudoku_board
 	sw 	$a0, SUDOKU_SOLVED($zero) 	# get 25 energy points (if the solver works)
+#	mfc0 $t0, $13
+#	and $t0, $t0, INVIS_MASK
+#	beq $t0, $zero, after
+#	sw 	$zero, ACTIVATE_INVIS($zero)
+after:
 	j pickup_loop	
 				
 
@@ -662,14 +687,14 @@ timer_interrupt:
 next:
 	
 	lw $a0, FLAGS_IN_HAND($zero)
-	li $a1, 3
+	li $a1, 3 
 	blt $a0, $a1, getting_flags_logic
 	jal go_home
 	j request_timer
 getting_flags_logic:
 	la $k0, flags
 	sw $k0, FLAG_REQUEST($zero)  # finds the nearest flag and goes to that one
-	lw $a0, 24($k0) # look 3 flags ahead
+	lw $a0, 160($k0) # look 3 flags ahead
 	li $t0, -1
 	beq $a0, $t0, generate_flag
 find_closest:
@@ -772,37 +797,37 @@ bonk_interrupt:
 invis_interrupt:						# TODOL make this actually do things
 	sw $a1, INVIS_ACKNOWLEDGE($zero)
 
-    lw $t0, BOT_X($zero)
-    lw $t1, BOT_Y($zero)    ## get my location
-
-	
-
-	# set a counter to scan whether or not our bot is getting closer to the last location
-	# of the competitor
-	li 	$t2, 0
-	
-
-	# scan whether we're getting closer to last location of competitor
-rescan:
-	bgt $t2, 10, interrupt_dispatch 
-	la 	$a0, target_x
-	lw 	$a0, 0($a0)
-	
-	la 	$a1, target_y
-	lw 	$a1, 0($a1)
-	
-    sub $a0, $a0, $t0
-    sub $a1, $a1, $t1       # get x and y differences
-
-    jal euclidean_dist      # find euclidean distance away
-
-	add $t2, $t2, 1 		# increment counter
-    bgt $v0, 100, rescan
-	
-   
-	
-    sw  $zero, ACTIVATE_INVIS($zero)
-
+#    lw $t0, BOT_X($zero)
+#    lw $t1, BOT_Y($zero)    ## get my location
+#
+#	
+#
+#	# set a counter to scan whether or not our bot is getting closer to the last location
+#	# of the competitor
+#	li 	$t2, 0
+#	
+#
+#	# scan whether we're getting closer to last location of competitor
+#rescan:
+#	bgt $t2, 10, interrupt_dispatch 
+#	la 	$a0, target_x
+#	lw 	$a0, 0($a0)
+#	
+#	la 	$a1, target_y
+#	lw 	$a1, 0($a1)
+#	
+#    sub $a0, $a0, $t0
+#    sub $a1, $a1, $t1       # get x and y differences
+#
+#    jal euclidean_dist      # find euclidean distance away
+#
+#	add $t2, $t2, 1 		# increment counter
+#    bgt $v0, 100, rescan
+#	
+#   
+#	
+#    sw  $zero, ACTIVATE_INVIS($zero)
+#
     j   interrupt_dispatch  # see if other interrupts are waiting
 
 
