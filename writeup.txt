@@ -4,8 +4,14 @@ they do occur, they only cost us up to three flags in our hand. We initially
 planned to activate invisibility when another bot was within a certain radius
 of ours, but we soon realized that the energy expense, when our bot's primary
 objective had always been to generate flags as quickly as possible and never
-face an empty board, was unacceptable. We scan all the available flags on the
-board and go to the closest ones to our bot courtesy of an O(n) find min. Once
-we have 3 flags, we return to base. This keeps us moving relatively fast
-(there's a penalty on velocity for carrying too many flags) and gives us time on the back traversal to continue solving sudoku puzzles, which
-generate energy, and bring more flags.  Any time there are only two flags remaining on the board, we try to generate as many more as possible, exhausting our energy and adding to our pool of flags. We give our bot as many flags to choose from as we are able with the idea our bot will spend less time hopscotching the map because it has more options that are potentially nearby.
+face an empty board, was unacceptable. 
+
+We scan all the available flags on the board and go to the closest ones to our 
+bot courtesy of an O(n) find min dist. Once we have 3 flags, we return to base. 
+This keeps us moving relatively fast (there's a penalty on velocity for carrying 
+too many flags) and gives us time on the back traversal to continue solving sudoku 
+puzzles, which generate energy, and bring more flags.  Any time there are only two 
+flags remaining on the board, we try to generate as many more as possible, exhausting 
+our energy and adding to our pool of flags. We give our bot as many flags to choose 
+from as we are able with the idea our bot will spend less time hopscotching the map 
+because it has more options that are potentially nearby.
